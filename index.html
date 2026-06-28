@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Room Electricity Manager</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+    <header class="sticky-header">
+        <div class="header-content">
+            <h1>⚡ Room Electricity Manager</h1>
+            <div class="header-controls">
+                <button id="theme-toggle" class="btn outline">🌙 Dark Mode</button>
+                <div class="backup-controls">
+                    <button id="export-btn" class="btn secondary">📥 Download JSON</button>
+                    <label for="import-file" class="btn secondary">📤 Import JSON</label>
+                    <input type="file" id="import-file" accept=".json" style="display: none;">
+                </div>
+            </div>
+        </div>
+        <div class="progress-container">
+            <div class="progress-bar-bg">
+                <div id="progress-bar" class="progress-bar-fill"></div>
+            </div>
+            <span id="progress-text">0/10 Rooms Completed</span>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="dashboard card">
+            <h2>Room Status Dashboard</h2>
+            <div id="status-chips" class="status-grid">
+                </div>
+        </section>
+
+        <section class="workspace card">
+            <div class="workspace-header">
+                <div class="room-selector">
+                    <label for="room-select">Select Room:</label>
+                    <select id="room-select">
+                        <option value="101">Room 101</option>
+                        <option value="102">Room 102</option>
+                        <option value="103">Room 103</option>
+                        <option value="104">Room 104</option>
+                        <option value="105">Room 105</option>
+                        <option value="106">Room 106</option>
+                        <option value="107">Room 107</option>
+                        <option value="108">Room 108</option>
+                        <option value="109">Room 109</option>
+                        <option value="110">Room 110</option>
+                    </select>
+                </div>
+                <div class="room-search">
+                    <label for="search-room">Search Room:</label>
+                    <input type="number" id="search-room" placeholder="e.g. 105">
+                    <button id="search-btn" class="btn outline">Go</button>
+                </div>
+                <div class="save-status">
+                    <span id="auto-save-indicator" class="indicator hidden">Saving...</span>
+                    <span id="last-saved-time">Last saved: Never</span>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table id="appliance-table">
+                    <thead>
+                        <tr>
+                            <th>Appliance</th>
+                            <th>Quantity</th>
+                            <th>Star Rating</th>
+                            <th>Hours Per Day</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        </tbody>
+                </table>
+            </div>
+
+            <div class="bill-section">
+                <label for="monthly-bill">Average Monthly Electricity Bill (₹):</label>
+                <input type="number" id="monthly-bill" placeholder="e.g. 1500" min="0">
+            </div>
+
+            <div class="action-buttons">
+                <button id="save-btn" class="btn primary">Save</button>
+                <button id="save-next-btn" class="btn primary">Save & Next Room</button>
+                <button id="prev-btn" class="btn secondary">Previous Room</button>
+                <button id="clear-room-btn" class="btn danger">Clear Current Room</button>
+                <button id="clear-all-btn" class="btn danger outline">Clear All Data</button>
+                <button id="print-room-btn" class="btn secondary">Print Current Room</button>
+                <button id="generate-pdf-btn" class="btn primary pdf-btn">Generate PDF</button>
+            </div>
+        </section>
+    </main>
+
+    <div id="pdf-container" class="pdf-offscreen">
+        <div id="pdf-page" class="pdf-page">
+            <div class="pdf-header">
+                <h2>Room Electricity Manager</h2>
+                <h3 id="pdf-room-title">Room XXX</h3>
+                <p id="pdf-date">Generated on: </p>
+            </div>
+            <table class="pdf-table">
+                <thead>
+                    <tr>
+                        <th>Appliance</th>
+                        <th>Quantity</th>
+                        <th>Star Rating</th>
+                        <th>Hours Per Day</th>
+                    </tr>
+                </thead>
+                <tbody id="pdf-tbody"></tbody>
+            </table>
+            <div class="pdf-footer">
+                <h4 id="pdf-bill">Average Monthly Electricity Bill: ₹0</h4>
+                <p id="pdf-page-num" class="page-number">Page X of 10</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script src="pdf.js"></script>
+</body>
+</html>
