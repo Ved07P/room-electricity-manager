@@ -1,297 +1,426 @@
-// --- Constants & Global Variables ---
-const ROOMS = ['101', '102', '103', '104', '105', '106', '107', '108', '109', '110'];
+// --- Constants & Global State ---
 const APPLIANCES = [
-    'Bulb', 'Tubelight', 'Fan', 'AC', 'Cooler', 'TV', 
-    'Fridge', 'Washing Machine', 'Water Purifier / RO', 'Geyser'
+    "Bulb", "Tubelight", "Fan", "AC", "Cooler", 
+    "TV", "Fridge", "Washing Machine", "Water Purifier / RO", "Geyser"
 ];
-const STORAGE_KEY = 'roomElectricityData';
-let appData = {};
-let currentRoom = '101';
-let autoSaveTimeout;
+
+let rooms = [];
+let currentRoomId = null;
 
 // --- DOM Elements ---
-const roomSelect = document.getElementById('room-select');
-const searchRoomInput = document.getElementById('search-room');
-const searchBtn = document.getElementById('search-btn');
-const tableBody = document.getElementById('table-body');
-const monthlyBillInput = document.getElementById('monthly-bill');
-const statusChipsContainer = document.getElementById('status-chips');
-const progressBar = document.getElementById('progress-bar');
-const progressText = document.getElementById('progress-text');
-const autoSaveIndicator = document.getElementById('auto-save-indicator');
-const lastSavedTime = document.getElementById('last-saved-time');
-const themeToggleBtn = document.getElementById('theme-toggle');
-
-// Buttons
-const saveBtn = document.getElementById('save-btn');
-const saveNextBtn = document.getElementById('save-next-btn');
-const prevBtn = document.getElementById('prev-btn');
-const clearRoomBtn = document.getElementById('clear-room-btn');
-const clearAllBtn = document.getElementById('clear-all-btn');
-const printRoomBtn = document.getElementById('print-room-btn');
-const exportBtn = document.getElementById('export-btn');
-const importFile = document.getElementById('import-file');
+const DOM = {
+    roomList: document.getElementById('roomList'),
+    addRoomBtn: document.getElementById('addRoomBtn'),
+    searchInput: document.getElementById('searchInput'),
+    sortSelect: document.getElementById('sortSelect'),
+    filterSelect: document.getElementById('filterSelect'),
+    
+    totalRooms: document.getElementById('totalRooms'),
+    completedRooms: document.getElementById('completedRooms'),
+    pendingRooms: document.getElementById('pendingRooms'),
+    progressText: document.getElementById('progressText'),
+    progressBar: document.getElementById('progressBar'),
+    
+    roomEditor: document.getElementById('roomEditor'),
+    emptyState: document.getElementById('emptyState'),
+    currentRoomTitle: document.getElementById('currentRoomTitle'),
+    roomNameInput: document.getElementById('roomNameInput'),
+    appliancesBody: document.getElementById('appliancesBody'),
+    monthlyBill: document.getElementById('monthlyBill'),
+    
+    duplicateRoomBtn: document.getElementById('duplicateRoomBtn'),
+    clearRoomBtn: document.getElementById('clearRoomBtn'),
+    deleteRoomBtn: document.getElementById('deleteRoomBtn'),
+    prevRoomBtn: document.getElementById('prevRoomBtn'),
+    nextRoomBtn: document.getElementById('nextRoomBtn'),
+    saveBtn: document.getElementById('saveBtn'),
+    clearAllBtn: document.getElementById('clearAllBtn'),
+    
+    saveStatus: document.getElementById('saveStatus'),
+    lastSavedTime: document.getElementById('lastSavedTime'),
+    themeToggle: document.getElementById('themeToggle'),
+    exportBtn: document.getElementById('exportBtn'),
+    importInput: document.getElementById('importInput'),
+    toastContainer: document.getElementById('toastContainer')
+};
 
 // --- Initialization ---
 function init() {
     loadData();
-    buildTable();
-    buildDashboard();
-    updateUI();
+    applyTheme();
+    generateTableRows();
     setupEventListeners();
-    applyTheme(localStorage.getItem('theme') || 'light');
-}
-
-function createEmptyRoomData() {
-    const data = { bill: '' };
-    APPLIANCES.forEach(app => {
-        data[app] = { quantity: '', star: '', hours: '' };
-    });
-    return data;
-}
-
-function loadData() {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-        appData = JSON.parse(stored);
+    
+    if (rooms.length > 0) {
+        selectRoom(rooms[0].id);
     } else {
-        ROOMS.forEach(room => appData[room] = createEmptyRoomData());
+        updateUI();
     }
-    // Ensure all rooms exist in case of corrupted data
-    ROOMS.forEach(room => {
-        if (!appData[room]) appData[room] = createEmptyRoomData();
-    });
 }
 
-function buildTable() {
-    tableBody.innerHTML = '';
-    APPLIANCES.forEach(appliance => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${appliance}</td>
-            <td><input type="number" min="0" data-appliance="${appliance}" data-field="quantity" class="data-input"></td>
-            <td><input type="number" min="0" max="5" data-appliance="${appliance}" data-field="star" class="data-input"></td>
-            <td><input type="number" min="0" max="24" data-appliance="${appliance}" data-field="hours" class="data-input"></td>
-        `;
-        tableBody.appendChild(tr);
-    });
+// --- Data Management ---
+function loadData() {
+    const data = localStorage.getItem('roomManagerData');
+    if (data) {
+        rooms = JSON.parse(data);
+    }
 }
 
-function buildDashboard() {
-    statusChipsContainer.innerHTML = '';
-    ROOMS.forEach(room => {
-        const chip = document.createElement('div');
-        chip.id = `chip-${room}`;
-        chip.className = 'status-chip';
-        statusChipsContainer.appendChild(chip);
-    });
+function saveData(showToast = true) {
+    localStorage.setItem('roomManagerData', JSON.stringify(rooms));
+    
+    const now = new Date();
+    DOM.lastSavedTime.textContent = `Last saved: ${now.toLocaleTimeString()}`;
+    DOM.saveStatus.textContent = "✔️ Auto Saved";
+    
+    if (showToast) showNotification("Progress Saved!");
     updateDashboard();
+    renderRoomList();
 }
 
 // --- Core Logic ---
-function updateUI() {
-    roomSelect.value = currentRoom;
-    const roomData = appData[currentRoom];
+function createRoom() {
+    const newId = Date.now().toString();
+    const newRoom = {
+        id: newId,
+        name: `Room ${rooms.length + 1}`,
+        appliances: {},
+        bill: "",
+        completed: false
+    };
     
-    // Populate Table
-    const inputs = document.querySelectorAll('.data-input');
-    inputs.forEach(input => {
-        const app = input.getAttribute('data-appliance');
-        const field = input.getAttribute('data-field');
-        input.value = roomData[app][field];
+    // Initialize appliance data
+    APPLIANCES.forEach(app => {
+        newRoom.appliances[app] = { quantity: "", star: "", hours: "" };
     });
-
-    // Populate Bill
-    monthlyBillInput.value = roomData.bill;
     
-    updateDashboard();
+    rooms.push(newRoom);
+    saveData(false);
+    selectRoom(newId);
+    showNotification("New room created");
 }
 
-function captureCurrentRoomData() {
-    const inputs = document.querySelectorAll('.data-input');
-    inputs.forEach(input => {
-        const app = input.getAttribute('data-appliance');
-        const field = input.getAttribute('data-field');
-        appData[currentRoom][app][field] = input.value;
-    });
-    appData[currentRoom].bill = monthlyBillInput.value;
+function duplicateRoom() {
+    if (!currentRoomId) return;
+    const currentRoom = rooms.find(r => r.id === currentRoomId);
+    const newId = Date.now().toString();
+    
+    const duplicate = JSON.parse(JSON.stringify(currentRoom));
+    duplicate.id = newId;
+    duplicate.name = `${currentRoom.name} (Copy)`;
+    
+    rooms.push(duplicate);
+    saveData(false);
+    selectRoom(newId);
+    showNotification("Room duplicated");
 }
 
-function isRoomCompleted(room) {
-    const data = appData[room];
-    if (data.bill === '') return false;
+function deleteRoom() {
+    if (!currentRoomId) return;
+    if (!confirm("Are you sure you want to delete this room?")) return;
     
-    for (let app of APPLIANCES) {
-        if (data[app].quantity === '' || data[app].star === '' || data[app].hours === '') {
-            return false;
-        }
+    rooms = rooms.filter(r => r.id !== currentRoomId);
+    currentRoomId = null;
+    
+    saveData(false);
+    if (rooms.length > 0) {
+        selectRoom(rooms[0].id);
+    } else {
+        updateUI();
     }
-    return true;
-}
-
-function updateDashboard() {
-    let completedCount = 0;
-    
-    ROOMS.forEach(room => {
-        const chip = document.getElementById(`chip-${room}`);
-        if (isRoomCompleted(room)) {
-            chip.className = 'status-chip completed';
-            chip.innerHTML = `✓ Room ${room}`;
-            completedCount++;
-        } else {
-            chip.className = 'status-chip pending';
-            chip.innerHTML = `○ Room ${room}`;
-        }
-    });
-
-    // Update Progress Bar
-    const percent = (completedCount / ROOMS.length) * 100;
-    progressBar.style.width = `${percent}%`;
-    progressText.innerText = `${completedCount}/10 Rooms Completed`;
-}
-
-function saveData(showIndicator = true) {
-    captureCurrentRoomData();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
-    updateDashboard();
-    
-    if (showIndicator) {
-        const now = new Date();
-        lastSavedTime.innerText = `Last saved: ${now.toLocaleTimeString()}`;
-        
-        autoSaveIndicator.classList.remove('hidden');
-        clearTimeout(autoSaveTimeout);
-        autoSaveTimeout = setTimeout(() => {
-            autoSaveIndicator.classList.add('hidden');
-        }, 1500);
-    }
+    showNotification("Room deleted");
 }
 
 function clearCurrentRoom() {
-    if(confirm(`Are you sure you want to clear data for Room ${currentRoom}?`)) {
-        appData[currentRoom] = createEmptyRoomData();
-        saveData(false);
-        updateUI();
-    }
+    if (!currentRoomId) return;
+    if (!confirm("Clear all data in this room?")) return;
+    
+    const room = rooms.find(r => r.id === currentRoomId);
+    APPLIANCES.forEach(app => {
+        room.appliances[app] = { quantity: "", star: "", hours: "" };
+    });
+    room.bill = "";
+    checkCompletion(room);
+    saveData(false);
+    populateRoomEditor(room);
+    showNotification("Room data cleared");
 }
 
 function clearAllData() {
-    if(confirm('⚠️ WARNING: This will delete ALL data for all 10 rooms. Proceed?')) {
-        ROOMS.forEach(room => appData[room] = createEmptyRoomData());
-        saveData(false);
-        updateUI();
+    if (!confirm("WARNING: This will delete ALL rooms. Are you sure?")) return;
+    rooms = [];
+    currentRoomId = null;
+    saveData(false);
+    updateUI();
+    showNotification("All data cleared");
+}
+
+// --- Validation & Completion ---
+function validateNumeric(input) {
+    input.value = input.value.replace(/[^0-9]/g, '');
+}
+
+function checkCompletion(room) {
+    let isComplete = true;
+    
+    // Check if every appliance field is filled (or at least defaults are set)
+    // For this prompt: "A room is Completed only if every required field has been filled."
+    for (let app of APPLIANCES) {
+        const data = room.appliances[app];
+        if (data.quantity === "" || data.star === "" || data.hours === "") {
+            isComplete = false;
+            break;
+        }
+    }
+    if (room.bill === "") isComplete = false;
+    
+    room.completed = isComplete;
+}
+
+function handleInputUpdate() {
+    if (!currentRoomId) return;
+    const room = rooms.find(r => r.id === currentRoomId);
+    
+    room.name = DOM.roomNameInput.value || `Room ${room.id.slice(-4)}`;
+    
+    APPLIANCES.forEach((app, index) => {
+        room.appliances[app].quantity = document.getElementById(`qty_${index}`).value;
+        room.appliances[app].star = document.getElementById(`star_${index}`).value;
+        room.appliances[app].hours = document.getElementById(`hrs_${index}`).value;
+    });
+    
+    room.bill = DOM.monthlyBill.value;
+    
+    checkCompletion(room);
+    
+    // Auto-save debounce imitation (save immediately for simplicity and offline reliability)
+    DOM.saveStatus.textContent = "⏳ Saving...";
+    setTimeout(() => { saveData(false); }, 300);
+}
+
+// --- UI Rendering ---
+function updateUI() {
+    updateDashboard();
+    renderRoomList();
+    if (rooms.length === 0) {
+        DOM.roomEditor.style.display = 'none';
+        DOM.emptyState.style.display = 'flex';
+    } else {
+        DOM.roomEditor.style.display = 'block';
+        DOM.emptyState.style.display = 'none';
     }
 }
 
-function navigateRoom(direction) {
-    saveData(false);
-    const currentIndex = ROOMS.indexOf(currentRoom);
-    if (direction === 'next' && currentIndex < ROOMS.length - 1) {
-        currentRoom = ROOMS[currentIndex + 1];
-    } else if (direction === 'prev' && currentIndex > 0) {
-        currentRoom = ROOMS[currentIndex - 1];
-    }
+function updateDashboard() {
+    const total = rooms.length;
+    const completed = rooms.filter(r => r.completed).length;
+    const pending = total - completed;
+    const progress = total === 0 ? 0 : Math.round((completed / total) * 100);
+    
+    DOM.totalRooms.textContent = total;
+    DOM.completedRooms.textContent = completed;
+    DOM.pendingRooms.textContent = pending;
+    DOM.progressText.textContent = `${progress}%`;
+    DOM.progressBar.style.width = `${progress}%`;
+}
+
+function renderRoomList() {
+    const searchTerm = DOM.searchInput.value.toLowerCase();
+    const sort = DOM.sortSelect.value;
+    const filter = DOM.filterSelect.value;
+    
+    let filteredRooms = rooms.filter(r => r.name.toLowerCase().includes(searchTerm));
+    
+    if (filter === 'completed') filteredRooms = filteredRooms.filter(r => r.completed);
+    if (filter === 'pending') filteredRooms = filteredRooms.filter(r => !r.completed);
+    
+    filteredRooms.sort((a, b) => {
+        if (sort === 'asc') return a.name.localeCompare(b.name);
+        return b.name.localeCompare(a.name);
+    });
+    
+    DOM.roomList.innerHTML = '';
+    
+    filteredRooms.forEach(room => {
+        const li = document.createElement('li');
+        li.className = `room-item ${room.id === currentRoomId ? 'active' : ''}`;
+        
+        const statusIcon = room.completed ? '✓' : '○';
+        const statusClass = room.completed ? 'status-completed' : 'status-pending';
+        
+        li.innerHTML = `
+            <span>${room.name}</span>
+            <span class="status-icon ${statusClass}">${statusIcon}</span>
+        `;
+        li.onclick = () => selectRoom(room.id);
+        DOM.roomList.appendChild(li);
+    });
+}
+
+function generateTableRows() {
+    DOM.appliancesBody.innerHTML = '';
+    APPLIANCES.forEach((app, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${app}</td>
+            <td><input type="number" id="qty_${index}" min="0" placeholder="0"></td>
+            <td><input type="number" id="star_${index}" min="0" placeholder="0"></td>
+            <td><input type="number" id="hrs_${index}" min="0" placeholder="0"></td>
+        `;
+        DOM.appliancesBody.appendChild(tr);
+    });
+    
+    // Attach event listeners to newly generated inputs
+    const inputs = DOM.appliancesBody.querySelectorAll('input');
+    inputs.forEach(input => {
+        input.addEventListener('input', () => {
+            validateNumeric(input);
+            handleInputUpdate();
+        });
+    });
+}
+
+function selectRoom(id) {
+    currentRoomId = id;
+    const room = rooms.find(r => r.id === id);
+    if (!room) return;
+    
+    populateRoomEditor(room);
     updateUI();
 }
 
-function searchRoom() {
-    const val = searchRoomInput.value.trim();
-    if (ROOMS.includes(val)) {
-        saveData(false);
-        currentRoom = val;
-        updateUI();
-        searchRoomInput.value = '';
-    } else {
-        alert('Room not found. Please enter a valid room number (101-110).');
-    }
+function populateRoomEditor(room) {
+    DOM.roomNameInput.value = room.name;
+    DOM.currentRoomTitle.textContent = "Managing:";
+    
+    APPLIANCES.forEach((app, index) => {
+        document.getElementById(`qty_${index}`).value = room.appliances[app].quantity || "";
+        document.getElementById(`star_${index}`).value = room.appliances[app].star || "";
+        document.getElementById(`hrs_${index}`).value = room.appliances[app].hours || "";
+    });
+    
+    DOM.monthlyBill.value = room.bill || "";
 }
 
-// --- Themes & Backups ---
-function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
-    themeToggleBtn.innerHTML = theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
-    localStorage.setItem('theme', theme);
+function navigateRoom(direction) {
+    if (rooms.length === 0) return;
+    const currentIndex = rooms.findIndex(r => r.id === currentRoomId);
+    let newIndex = currentIndex + direction;
+    
+    if (newIndex < 0) newIndex = rooms.length - 1;
+    if (newIndex >= rooms.length) newIndex = 0;
+    
+    selectRoom(rooms[newIndex].id);
 }
 
+// --- Import / Export ---
 function exportJSON() {
-    saveData(false);
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", "electricity_data_backup.json");
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
+    if (rooms.length === 0) return showNotification("No data to export");
+    
+    const dataStr = JSON.stringify(rooms, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `room_electricity_backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showNotification("JSON Backup Downloaded");
 }
 
 function importJSON(event) {
     const file = event.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const importedData = JSON.parse(e.target.result);
-                // Basic validation
-                if (importedData['101'] && importedData['110']) {
-                    appData = importedData;
-                    saveData(false);
-                    updateUI();
-                    alert('Data imported successfully!');
-                } else {
-                    alert('Invalid file format.');
-                }
-            } catch (err) {
-                alert('Error parsing JSON file.');
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const importedData = JSON.parse(e.target.result);
+            if (Array.isArray(importedData)) {
+                rooms = importedData;
+                saveData(false);
+                if (rooms.length > 0) selectRoom(rooms[0].id);
+                else updateUI();
+                showNotification("Data Imported Successfully");
+            } else {
+                alert("Invalid JSON format");
             }
-        };
-        reader.readAsText(file);
-    }
-    event.target.value = ''; // Reset input
+        } catch (error) {
+            alert("Error parsing JSON file");
+        }
+    };
+    reader.readAsText(file);
+    event.target.value = ""; // Reset input
+}
+
+// --- Theme & Extras ---
+function applyTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    DOM.themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+}
+
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+    DOM.themeToggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+}
+
+function showNotification(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = message;
+    DOM.toastContainer.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
 }
 
 // --- Event Listeners Setup ---
 function setupEventListeners() {
-    roomSelect.addEventListener('change', (e) => {
-        saveData(false);
-        currentRoom = e.target.value;
-        updateUI();
+    DOM.addRoomBtn.addEventListener('click', createRoom);
+    DOM.duplicateRoomBtn.addEventListener('click', duplicateRoom);
+    DOM.deleteRoomBtn.addEventListener('click', deleteRoom);
+    DOM.clearRoomBtn.addEventListener('click', clearCurrentRoom);
+    DOM.clearAllBtn.addEventListener('click', clearAllData);
+    
+    DOM.prevRoomBtn.addEventListener('click', () => navigateRoom(-1));
+    DOM.nextRoomBtn.addEventListener('click', () => navigateRoom(1));
+    
+    DOM.saveBtn.addEventListener('click', () => saveData(true));
+    DOM.exportBtn.addEventListener('click', exportJSON);
+    DOM.importInput.addEventListener('change', importJSON);
+    
+    DOM.themeToggle.addEventListener('click', toggleTheme);
+    
+    DOM.searchInput.addEventListener('input', renderRoomList);
+    DOM.sortSelect.addEventListener('change', renderRoomList);
+    DOM.filterSelect.addEventListener('change', renderRoomList);
+    
+    DOM.roomNameInput.addEventListener('input', handleInputUpdate);
+    DOM.monthlyBill.addEventListener('input', () => {
+        validateNumeric(DOM.monthlyBill);
+        handleInputUpdate();
     });
-
-    searchBtn.addEventListener('click', searchRoom);
-    searchRoomInput.addEventListener('keypress', (e) => {
-        if(e.key === 'Enter') searchRoom();
+    
+    document.getElementById('printBtn').addEventListener('click', () => {
+        window.print();
     });
-
-    // Auto-save on input change
-    tableBody.addEventListener('input', () => saveData(true));
-    monthlyBillInput.addEventListener('input', () => saveData(true));
-
-    // Validation to prevent e, +, - in number fields
+    
+    // Keyboard Shortcuts
     document.addEventListener('keydown', (e) => {
-        if(e.target.type === 'number' && ['e', 'E', '+', '-'].includes(e.key)) {
+        if (e.ctrlKey && e.key === 's') {
             e.preventDefault();
+            saveData(true);
+        }
+        if (e.altKey && e.key === 'n') {
+            e.preventDefault();
+            createRoom();
         }
     });
-
-    saveBtn.addEventListener('click', () => {
-        saveData(true);
-        alert('Data saved successfully!');
-    });
-    
-    saveNextBtn.addEventListener('click', () => navigateRoom('next'));
-    prevBtn.addEventListener('click', () => navigateRoom('prev'));
-    clearRoomBtn.addEventListener('click', clearCurrentRoom);
-    clearAllBtn.addEventListener('click', clearAllData);
-    printRoomBtn.addEventListener('click', () => window.print());
-    
-    themeToggleBtn.addEventListener('click', () => {
-        const currentTheme = document.documentElement.getAttribute('data-theme');
-        applyTheme(currentTheme === 'light' ? 'dark' : 'light');
-    });
-
-    exportBtn.addEventListener('click', exportJSON);
-    importFile.addEventListener('change', importJSON);
 }
 
-// Start App
-init();
+// Boot up
+window.onload = init;
+        
