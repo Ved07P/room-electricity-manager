@@ -1,85 +1,94 @@
-document.getElementById('generate-pdf-btn').addEventListener('click', async function() {
-    // Ensure latest data is saved before generating
-    captureCurrentRoomData();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
-
-    const btn = this;
-    const originalText = btn.innerText;
-    btn.innerText = "Generating PDF...";
-    btn.disabled = true;
-
-    try {
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF('p', 'pt', 'a4'); 
-        
-        const templateContainer = document.getElementById('pdf-container');
-        const pdfPage = document.getElementById('pdf-page');
-        const pdfRoomTitle = document.getElementById('pdf-room-title');
-        const pdfDate = document.getElementById('pdf-date');
-        const pdfTbody = document.getElementById('pdf-tbody');
-        const pdfBill = document.getElementById('pdf-bill');
-        const pdfPageNum = document.getElementById('pdf-page-num');
-
-        // Bring template on screen but hidden behind rendering context to allow html2canvas to read it
-        templateContainer.style.top = '0';
-        templateContainer.style.left = '0';
-        templateContainer.style.zIndex = '-9999';
-
-        const currentDate = new Date().toLocaleString();
-
-        for (let i = 0; i < ROOMS.length; i++) {
-            const room = ROOMS[i];
-            const data = appData[room];
-
-            // Populate Template
-            pdfRoomTitle.innerText = `Room ${room}`;
-            pdfDate.innerText = `Generated on: ${currentDate}`;
-            pdfPageNum.innerText = `Page ${i + 1} of 10`;
-            pdfBill.innerText = `Average Monthly Electricity Bill: ₹${data.bill || '0'}`;
-
-            pdfTbody.innerHTML = '';
-            APPLIANCES.forEach(app => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${app}</td>
-                    <td>${data[app].quantity || '0'}</td>
-                    <td>${data[app].star || '0'}</td>
-                    <td>${data[app].hours || '0'}</td>
-                `;
-                pdfTbody.appendChild(tr);
-            });
-
-            // Capture via html2canvas
-            const canvas = await html2canvas(pdfPage, {
-                scale: 2, // High resolution
-                useCORS: true,
-                logging: false
-            });
-
-            const imgData = canvas.toDataURL('image/png');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-
-            // Add new page if not the last room
-            if (i < ROOMS.length - 1) {
-                pdf.addPage();
-            }
-        }
-
-        // Save PDF
-        pdf.save('Room_Electricity_Report.pdf');
-
-        // Hide template again
-        templateContainer.style.top = '-9999px';
-        templateContainer.style.left = '-9999px';
-
-    } catch (error) {
-        console.error("PDF Generation Error:", error);
-        alert("An error occurred while generating the PDF.");
-    } finally {
-        btn.innerText = originalText;
-        btn.disabled = false;
+// Optimized PDF Generation using jsPDF and autoTable (No full page images)
+document.getElementById('generatePdfBtn').addEventListener('click', async () => {
+    if (rooms.length === 0) {
+        alert("No rooms available to generate PDF.");
+        return;
     }
+
+    // Access jsPDF from CDN window object
+    const { jsPDF } = window.jspdf;
+    
+    // Initialize Document
+    const doc = new jsPDF('p', 'pt', 'a4');
+    
+    // Notify user
+    const originalText = document.getElementById('generatePdfBtn').innerHTML;
+    document.getElementById('generatePdfBtn').innerHTML = "⏳ Generating...";
+    
+    // Allow UI to update before heavy processing
+    setTimeout(() => {
+        try {
+            const pageHeight = doc.internal.pageSize.height;
+            const pageWidth = doc.internal.pageSize.width;
+            const margin = 40;
+            const today = new Date().toLocaleDateString();
+
+            rooms.forEach((room, index) => {
+                if (index > 0) {
+                    doc.addPage();
+                }
+
+                // Header
+                doc.setFontSize(22);
+                doc.setTextColor(49, 130, 206); // Primary Color
+                doc.text("Room Electricity Manager", pageWidth / 2, margin, { align: "center" });
+                
+                doc.setFontSize(16);
+                doc.setTextColor(45, 55, 72);
+                doc.text(`Room: ${room.name}`, margin, margin + 40);
+
+                // Status tag
+                const status = room.completed ? "Status: Completed" : "Status: Pending";
+                doc.setFontSize(12);
+                doc.setTextColor(room.completed ? 56 : 214, room.completed ? 161 : 158, room.completed ? 105 : 46);
+                doc.text(status, pageWidth - margin, margin + 40, { align: "right" });
+
+                // Prepare Table Data
+                const tableBody = APPLIANCES.map(app => {
+                    const data = room.appliances[app] || {};
+                    return [
+                        app,
+                        data.quantity || '0',
+                        data.star || '0',
+                        data.hours || '0'
+                    ];
+                });
+
+                // Draw Table using AutoTable plugin
+                doc.autoTable({
+                    startY: margin + 60,
+                    head: [['Appliance', 'Quantity', 'Star Rating', 'Hours/Day']],
+                    body: tableBody,
+                    theme: 'grid',
+                    headStyles: { fillColor: [49, 130, 206], textColor: 255 },
+                    styles: { fontSize: 10, cellPadding: 6 },
+                    alternateRowStyles: { fillColor: [247, 250, 252] },
+                    margin: { left: margin, right: margin }
+                });
+
+                // Bill Section below table
+                const finalY = doc.lastAutoTable.finalY + 30;
+                doc.setFontSize(14);
+                doc.setTextColor(45, 55, 72);
+                doc.text(`Average Monthly Electricity Bill: Rs. ${room.bill || '0'}`, margin, finalY);
+
+                // Footer
+                doc.setFontSize(10);
+                doc.setTextColor(160, 174, 192);
+                doc.text(`Generated on: ${today}`, margin, pageHeight - margin);
+                doc.text(`Page ${index + 1} of ${rooms.length}`, pageWidth - margin, pageHeight - margin, { align: "right" });
+            });
+
+            // Save PDF
+            doc.save('Room_Electricity_Report.pdf');
+            
+        } catch (error) {
+            console.error(error);
+            alert("An error occurred while generating PDF.");
+        } finally {
+            // Restore button text
+            document.getElementById('generatePdfBtn').innerHTML = originalText;
+        }
+    }, 100);
 });
+
