@@ -6,122 +6,115 @@
     <title>Room Electricity Manager</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="script.js" defer></script>
+    <script src="pdf.js" defer></script>
 </head>
 <body>
-    <header class="sticky-header">
-        <div class="header-content">
-            <h1>⚡ Room Electricity Manager</h1>
-            <div class="header-controls">
-                <button id="theme-toggle" class="btn outline">🌙 Dark Mode</button>
-                <div class="backup-controls">
-                    <button id="export-btn" class="btn secondary">📥 Download JSON</button>
-                    <label for="import-file" class="btn secondary">📤 Import JSON</label>
-                    <input type="file" id="import-file" accept=".json" style="display: none;">
-                </div>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>⚡ Room Manager</h2>
+                <button id="addRoomBtn" class="btn-primary" title="Add New Room">➕ Add Room</button>
             </div>
-        </div>
-        <div class="progress-container">
-            <div class="progress-bar-bg">
-                <div id="progress-bar" class="progress-bar-fill"></div>
-            </div>
-            <span id="progress-text">0/10 Rooms Completed</span>
-        </div>
-    </header>
-
-    <main class="container">
-        <section class="dashboard card">
-            <h2>Room Status Dashboard</h2>
-            <div id="status-chips" class="status-grid">
-                </div>
-        </section>
-
-        <section class="workspace card">
-            <div class="workspace-header">
-                <div class="room-selector">
-                    <label for="room-select">Select Room:</label>
-                    <select id="room-select">
-                        <option value="101">Room 101</option>
-                        <option value="102">Room 102</option>
-                        <option value="103">Room 103</option>
-                        <option value="104">Room 104</option>
-                        <option value="105">Room 105</option>
-                        <option value="106">Room 106</option>
-                        <option value="107">Room 107</option>
-                        <option value="108">Room 108</option>
-                        <option value="109">Room 109</option>
-                        <option value="110">Room 110</option>
+            <div class="sidebar-controls">
+                <input type="text" id="searchInput" placeholder="🔍 Search rooms...">
+                <div class="filter-sort-group">
+                    <select id="sortSelect">
+                        <option value="asc">Sort A-Z</option>
+                        <option value="desc">Sort Z-A</option>
+                    </select>
+                    <select id="filterSelect">
+                        <option value="all">All Rooms</option>
+                        <option value="completed">Completed</option>
+                        <option value="pending">Pending</option>
                     </select>
                 </div>
-                <div class="room-search">
-                    <label for="search-room">Search Room:</label>
-                    <input type="number" id="search-room" placeholder="e.g. 105">
-                    <button id="search-btn" class="btn outline">Go</button>
+            </div>
+            <ul id="roomList" class="room-list">
+                </ul>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div class="auto-save-indicator">
+                    <span id="saveStatus">✔️ All changes saved</span>
+                    <small id="lastSavedTime">Last saved: Just now</small>
                 </div>
-                <div class="save-status">
-                    <span id="auto-save-indicator" class="indicator hidden">Saving...</span>
-                    <span id="last-saved-time">Last saved: Never</span>
+                <div class="topbar-actions">
+                    <button id="exportBtn" class="btn-secondary">💾 Export JSON</button>
+                    <label for="importInput" class="btn-secondary import-label">📂 Import JSON</label>
+                    <input type="file" id="importInput" accept=".json" style="display: none;">
+                    <button id="clearAllBtn" class="btn-danger">🗑️ Clear All Data</button>
+                    <button id="themeToggle" class="btn-icon">🌙</button>
                 </div>
-            </div>
+            </header>
 
-            <div class="table-responsive">
-                <table id="appliance-table">
-                    <thead>
-                        <tr>
-                            <th>Appliance</th>
-                            <th>Quantity</th>
-                            <th>Star Rating</th>
-                            <th>Hours Per Day</th>
-                        </tr>
-                    </thead>
-                    <tbody id="table-body">
-                        </tbody>
-                </table>
-            </div>
+            <section class="dashboard card">
+                <div class="stats-grid">
+                    <div class="stat-box">Total Rooms <strong id="totalRooms">0</strong></div>
+                    <div class="stat-box completed-text">Completed <strong id="completedRooms">0</strong></div>
+                    <div class="stat-box pending-text">Pending <strong id="pendingRooms">0</strong></div>
+                    <div class="stat-box">Progress <strong id="progressText">0%</strong></div>
+                </div>
+                <div class="progress-bar-container">
+                    <div id="progressBar" class="progress-bar" style="width: 0%;"></div>
+                </div>
+            </section>
 
-            <div class="bill-section">
-                <label for="monthly-bill">Average Monthly Electricity Bill (₹):</label>
-                <input type="number" id="monthly-bill" placeholder="e.g. 1500" min="0">
-            </div>
+            <section id="roomEditor" class="room-editor card" style="display: none;">
+                <div class="room-header">
+                    <div class="room-title-group">
+                        <h3 id="currentRoomTitle">Room</h3>
+                        <input type="text" id="roomNameInput" placeholder="Enter Room Number (e.g., 101)">
+                    </div>
+                    <div class="room-actions">
+                        <button id="duplicateRoomBtn" class="btn-secondary">📑 Duplicate</button>
+                        <button id="clearRoomBtn" class="btn-secondary">🧹 Clear Room</button>
+                        <button id="deleteRoomBtn" class="btn-danger">🗑️ Delete Room</button>
+                    </div>
+                </div>
 
-            <div class="action-buttons">
-                <button id="save-btn" class="btn primary">Save</button>
-                <button id="save-next-btn" class="btn primary">Save & Next Room</button>
-                <button id="prev-btn" class="btn secondary">Previous Room</button>
-                <button id="clear-room-btn" class="btn danger">Clear Current Room</button>
-                <button id="clear-all-btn" class="btn danger outline">Clear All Data</button>
-                <button id="print-room-btn" class="btn secondary">Print Current Room</button>
-                <button id="generate-pdf-btn" class="btn primary pdf-btn">Generate PDF</button>
-            </div>
-        </section>
-    </main>
+                <div class="table-responsive">
+                    <table id="appliancesTable">
+                        <thead>
+                            <tr>
+                                <th>Appliance</th>
+                                <th>Quantity</th>
+                                <th>Star Rating</th>
+                                <th>Hours Per Day</th>
+                            </tr>
+                        </thead>
+                        <tbody id="appliancesBody">
+                            </tbody>
+                    </table>
+                </div>
 
-    <div id="pdf-container" class="pdf-offscreen">
-        <div id="pdf-page" class="pdf-page">
-            <div class="pdf-header">
-                <h2>Room Electricity Manager</h2>
-                <h3 id="pdf-room-title">Room XXX</h3>
-                <p id="pdf-date">Generated on: </p>
+                <div class="bill-section">
+                    <label for="monthlyBill">Average Monthly Electricity Bill (₹):</label>
+                    <input type="number" id="monthlyBill" placeholder="Enter amount" min="0">
+                </div>
+
+                <div class="editor-footer">
+                    <div class="nav-buttons">
+                        <button id="prevRoomBtn" class="btn-secondary">⬅️ Previous</button>
+                        <button id="nextRoomBtn" class="btn-secondary">Next ➡️</button>
+                    </div>
+                    <div class="action-buttons">
+                        <button id="saveBtn" class="btn-secondary">💾 Save</button>
+                        <button id="printBtn" class="btn-secondary">🖨️ Print Current</button>
+                        <button id="generatePdfBtn" class="btn-primary">📄 Generate PDF (All)</button>
+                    </div>
+                </div>
+            </section>
+            
+            <div id="emptyState" class="empty-state">
+                <h2>No Rooms Available</h2>
+                <p>Click "Add Room" in the sidebar to get started.</p>
             </div>
-            <table class="pdf-table">
-                <thead>
-                    <tr>
-                        <th>Appliance</th>
-                        <th>Quantity</th>
-                        <th>Star Rating</th>
-                        <th>Hours Per Day</th>
-                    </tr>
-                </thead>
-                <tbody id="pdf-tbody"></tbody>
-            </table>
-            <div class="pdf-footer">
-                <h4 id="pdf-bill">Average Monthly Electricity Bill: ₹0</h4>
-                <p id="pdf-page-num" class="page-number">Page X of 10</p>
-            </div>
-        </div>
+        </main>
     </div>
 
-    <script src="script.js"></script>
-    <script src="pdf.js"></script>
+    <div id="toastContainer" class="toast-container"></div>
 </body>
 </html>
